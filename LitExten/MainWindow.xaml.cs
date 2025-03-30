@@ -4,6 +4,11 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using Xceed.Words.NET;
 using System.Text.RegularExpressions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Xceed.Document.NET;
+using System.Xml.Linq;
 
 
 
@@ -73,12 +78,12 @@ namespace WordExcelParser
         {
             string startMarker = "4.1 Литература";
             string endMarker = "4.2 Периодические издания";
-
             var paragraphs = document.Paragraphs;
+
+            // Основная ветка: поиск маркеров как текста
             List<int> startIndices = new List<int>();
             List<int> endIndices = new List<int>();
 
-            // Находим индексы параграфов с маркерами
             for (int i = 0; i < paragraphs.Count; i++)
             {
                 string text = paragraphs[i].Text;
@@ -92,34 +97,73 @@ namespace WordExcelParser
                 }
             }
 
-            if (startIndices.Count == 0 || endIndices.Count == 0)
+            // Если маркеры найдены как текст
+            if (startIndices.Count > 0 && endIndices.Count > 0)
             {
-                return new List<string> { "Не удалось найти раздел литературы" };
-            }
+                int lastStartIndex = startIndices.Last();
+                int lastEndIndex = endIndices.FirstOrDefault(end => end > lastStartIndex, -1);
 
-            // Берем последний startIndex и первый endIndex после него
-            int lastStartIndex = startIndices.Last();
-            int lastEndIndex = endIndices.FirstOrDefault(end => end > lastStartIndex, -1);
-
-            if (lastEndIndex == -1 || lastStartIndex >= lastEndIndex)
-            {
-                return new List<string> { "Не удалось найти корректный раздел литературы" };
-            }
-
-            // Извлекаем текст параграфов между маркерами
-            List<string> literatureLines = new List<string>();
-            for (int i = lastStartIndex + 1; i < lastEndIndex; i++)
-            {
-                string paragraphText = paragraphs[i].Text.Trim();
-                if (!string.IsNullOrWhiteSpace(paragraphText))
+                if (lastEndIndex != -1 && lastStartIndex < lastEndIndex)
                 {
-                    literatureLines.Add(paragraphText);
+                    List<string> literatureLines = new List<string>();
+                    for (int i = lastStartIndex + 1; i < lastEndIndex; i++)
+                    {
+                        string paragraphText = paragraphs[i].Text.Trim();
+                        if (!string.IsNullOrWhiteSpace(paragraphText))
+                        {
+                            literatureLines.Add(paragraphText);
+                        }
+                    }
+                    return literatureLines.Count > 0 ? literatureLines : new List<string> { "Список литературы пуст" };
                 }
             }
 
-            return literatureLines.Count > 0 ? literatureLines : new List<string> { "Список литературы пуст" };
+            startMarker = "Литература";
+            endMarker = "Периодические издания";
+          
+
+            // Основная ветка: поиск маркеров как текста
+            startIndices = new List<int>();
+            endIndices = new List<int>();
+
+            for (int i = 0; i < paragraphs.Count; i++)
+            {
+                string text = paragraphs[i].Text;
+                if (text.Contains(startMarker, StringComparison.OrdinalIgnoreCase))
+                {
+                    startIndices.Add(i);
+                }
+                else if (text.Contains(endMarker, StringComparison.OrdinalIgnoreCase))
+                {
+                    endIndices.Add(i);
+                }
+            }
+
+            // Если маркеры найдены как текст
+            if (startIndices.Count > 0 && endIndices.Count > 0)
+            {
+                int lastStartIndex = startIndices.Last();
+                int lastEndIndex = endIndices.FirstOrDefault(end => end > lastStartIndex, -1);
+
+                if (lastEndIndex != -1 && lastStartIndex < lastEndIndex)
+                {
+                    List<string> literatureLines = new List<string>();
+                    for (int i = lastStartIndex + 1; i < lastEndIndex; i++)
+                    {
+                        string paragraphText = paragraphs[i].Text.Trim();
+                        if (!string.IsNullOrWhiteSpace(paragraphText))
+                        {
+                            literatureLines.Add(paragraphText);
+                        }
+                    }
+                    return literatureLines.Count > 0 ? literatureLines : new List<string> { "Список литературы пуст" };
+                }
+            }
+
+            return new List<string> { "Список литературы не был найден" };
         }
- 
+
+
         // Получение текста первой страницы
         private string GetFirstPageText(DocX document)
         {
@@ -153,7 +197,6 @@ namespace WordExcelParser
             
             return discipline;
         }
-
     }
     public static class StringExtensions
     {
