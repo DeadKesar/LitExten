@@ -1,4 +1,5 @@
-﻿using Microsoft.Win32;
+﻿using Microsoft.Office.Interop.Word;
+using Microsoft.Win32;
 using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
@@ -7,12 +8,14 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using Xceed.Words.NET;
+using Application = Microsoft.Office.Interop.Word.Application;
+using Word = Microsoft.Office.Interop.Word;
 
 
 
 namespace WordExcelParser
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : System.Windows.Window
     {
         private List<(string Discipline, List<string> Literature, List<string> MaterialSupport)> _processedData =
             new List<(string, List<string>, List<string>)>();
@@ -28,7 +31,7 @@ namespace WordExcelParser
             OpenFileDialog openFileDialog = new OpenFileDialog
             {
                 Multiselect = true,
-                Filter = "Word Documents (*.docx)|*.docx"
+                Filter = "Word Documents (*.docx;*.doc)|*.docx;*.doc"
             };
 
             if (openFileDialog.ShowDialog() == true)
@@ -67,20 +70,27 @@ namespace WordExcelParser
             {
                 try
                 {
-                    using (DocX document = DocX.Load(filePath))
+                    string docxPath = filePath;
+                    if (Path.GetExtension(filePath).Equals(".doc", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Парсинг литературы (шаги 1-4)
+                        docxPath = ConvertDocToDocx(filePath);
+                        if (string.IsNullOrEmpty(docxPath))
+                        {
+                            results.Add($"Ошибка: Не удалось конвертировать {Path.GetFileName(filePath)} в .docx");
+                            ProgressBar.Value++;
+                            continue;
+                        }
+                    }
+
+                    using (DocX document = DocX.Load(docxPath))
+                    {
                         List<string> literatureLines = ExtractLiterature(document);
                         List<string> materialSupportLines = ExtractMaterialSupport(document);
-
-                        // Парсинг дисциплины с первой страницы (шаги 5-7)
                         string firstPageText = GetFirstPageText(document);
                         string discipline = ExtractDiscipline(firstPageText);
 
-                        // Сохраняем данные для экспорта
                         _processedData.Add((discipline, literatureLines, materialSupportLines));
 
-                        // Добавляем результат для отображения
                         results.Add($"Файл: {Path.GetFileName(filePath)}");
                         results.Add($"Дисциплина: {discipline}");
                         results.Add("Литература:");
@@ -88,6 +98,11 @@ namespace WordExcelParser
                         results.Add("Обеспечение:");
                         results.AddRange(materialSupportLines);
                         results.Add("---");
+                    }
+
+                    if (docxPath != filePath && File.Exists(docxPath))
+                    {
+                        File.Delete(docxPath);
                     }
                 }
                 catch (Exception ex)
@@ -100,6 +115,41 @@ namespace WordExcelParser
             ResultListBox.ItemsSource = results;
             ProgressBar.Visibility = Visibility.Collapsed;
         }
+
+        private string ConvertDocToDocx(string docPath)
+        {
+            Application wordApp = null;
+            Document doc = null;
+            try
+            {
+                wordApp = new Application { Visible = false };
+                doc = wordApp.Documents.Open(docPath);
+
+                string tempDocxPath = Path.Combine(Path.GetTempPath(), Path.GetFileNameWithoutExtension(docPath) + "_temp.docx");
+                doc.SaveAs2(tempDocxPath, WdSaveFormat.wdFormatXMLDocument);
+                doc.Close();
+                wordApp.Quit();
+
+                return tempDocxPath;
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                MessageBox.Show($"Ошибка: Microsoft Word не установлен или недоступен. Конверсия .doc невозможна: {ex.Message}");
+                if (doc != null) doc.Close();
+                if (wordApp != null) wordApp.Quit();
+                return null;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при конверсии {Path.GetFileName(docPath)}: {ex.Message}");
+                if (doc != null) doc.Close();
+                if (wordApp != null) wordApp.Quit();
+                return null;
+            }
+        }
+
+
+
 
         // Извлечение текста между последними "4.1 Литература" и "4.2 Периодические издания" как списка параграфов
         private List<string> ExtractLiterature(DocX document)
