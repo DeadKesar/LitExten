@@ -108,7 +108,8 @@ namespace WordExcelParser
             var markers = new[]
             {
                 new { Start = "4.1 Литература", End = "4.2 Периодические издания" },
-                new { Start = "Литература", End = "Периодические издания" }
+                new { Start = "Литература", End = "Периодические издания" },
+                new { Start = "Литература", End = "Интернет-рес" }
             };
 
             foreach (var marker in markers)
