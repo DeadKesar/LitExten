@@ -1,4 +1,4 @@
-﻿using Microsoft.Office.Interop.Word;
+﻿
 using Microsoft.Win32;
 using OfficeOpenXml;
 using System;
@@ -8,8 +8,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using Xceed.Words.NET;
-using Application = Microsoft.Office.Interop.Word.Application;
-using Word = Microsoft.Office.Interop.Word;
+
 
 
 
@@ -118,26 +117,31 @@ namespace WordExcelParser
 
         private string ConvertDocToDocx(string docPath)
         {
-            Application wordApp = null;
-            Document doc = null;
+            dynamic wordApp = null;
+            dynamic doc = null;
             try
             {
-                wordApp = new Application { Visible = false };
+                // Динамическая загрузка Word.Application
+                Type wordType = Type.GetTypeFromProgID("Word.Application");
+                if (wordType == null)
+                {
+                    MessageBox.Show("Microsoft Word не установлен. Поддержка .doc файлов невозможна.");
+                    return null;
+                }
+
+                wordApp = Activator.CreateInstance(wordType);
+                wordApp.Visible = false;
+
+                // Открытие документа
                 doc = wordApp.Documents.Open(docPath);
 
+                // Сохранение в .docx
                 string tempDocxPath = Path.Combine(Path.GetTempPath(), Path.GetFileNameWithoutExtension(docPath) + "_temp.docx");
-                doc.SaveAs2(tempDocxPath, WdSaveFormat.wdFormatXMLDocument);
+                doc.SaveAs2(tempDocxPath, 16); // 16 = WdSaveFormat.wdFormatXMLDocument
                 doc.Close();
                 wordApp.Quit();
 
                 return tempDocxPath;
-            }
-            catch (System.Runtime.InteropServices.COMException ex)
-            {
-                MessageBox.Show($"Ошибка: Microsoft Word не установлен или недоступен. Конверсия .doc невозможна: {ex.Message}");
-                if (doc != null) doc.Close();
-                if (wordApp != null) wordApp.Quit();
-                return null;
             }
             catch (Exception ex)
             {
