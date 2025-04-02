@@ -1,4 +1,4 @@
-﻿using Microsoft.Office.Interop.Word;
+﻿
 using Microsoft.Win32;
 using OfficeOpenXml;
 using System;
@@ -8,8 +8,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using Xceed.Words.NET;
-using Application = Microsoft.Office.Interop.Word.Application;
-using Word = Microsoft.Office.Interop.Word;
+
 
 
 
