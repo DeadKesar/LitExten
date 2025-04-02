@@ -118,26 +118,31 @@ namespace WordExcelParser
 
         private string ConvertDocToDocx(string docPath)
         {
-            Application wordApp = null;
-            Document doc = null;
+            dynamic wordApp = null;
+            dynamic doc = null;
             try
             {
-                wordApp = new Application { Visible = false };
+                // Динамическая загрузка Word.Application
+                Type wordType = Type.GetTypeFromProgID("Word.Application");
+                if (wordType == null)
+                {
+                    MessageBox.Show("Microsoft Word не установлен. Поддержка .doc файлов невозможна.");
+                    return null;
+                }
+
+                wordApp = Activator.CreateInstance(wordType);
+                wordApp.Visible = false;
+
+                // Открытие документа
                 doc = wordApp.Documents.Open(docPath);
 
+                // Сохранение в .docx
                 string tempDocxPath = Path.Combine(Path.GetTempPath(), Path.GetFileNameWithoutExtension(docPath) + "_temp.docx");
-                doc.SaveAs2(tempDocxPath, WdSaveFormat.wdFormatXMLDocument);
+                doc.SaveAs2(tempDocxPath, 16); // 16 = WdSaveFormat.wdFormatXMLDocument
                 doc.Close();
                 wordApp.Quit();
 
                 return tempDocxPath;
-            }
-            catch (System.Runtime.InteropServices.COMException ex)
-            {
-                MessageBox.Show($"Ошибка: Microsoft Word не установлен или недоступен. Конверсия .doc невозможна: {ex.Message}");
-                if (doc != null) doc.Close();
-                if (wordApp != null) wordApp.Quit();
-                return null;
             }
             catch (Exception ex)
             {
@@ -154,6 +159,7 @@ namespace WordExcelParser
         // Извлечение текста между последними "4.1 Литература" и "4.2 Периодические издания" как списка параграфов
         private List<string> ExtractLiterature(DocX document)
         {
+            string pattern = @"^\d{1,2}\.\s";
             var paragraphs = document.Paragraphs;
             var markers = new[]
             {
@@ -188,7 +194,10 @@ namespace WordExcelParser
                         {
                             string paragraphText = paragraphs[i].Text.Trim();
                             if (!string.IsNullOrWhiteSpace(paragraphText))
+                            {
+                                paragraphText = Regex.Replace(paragraphText, pattern, "");
                                 literatureLines.Add(paragraphText);
+                            }
                         }
                         return literatureLines.Count > 0 ? literatureLines : new List<string> { "Список литературы пуст" };
                     }
@@ -207,7 +216,7 @@ namespace WordExcelParser
             for (int i = 0; i < paragraphs.Count; i++)
             {
                 string text = paragraphs[i].Text;
-                if (text.Contains("5. Материально-техническое обеспечение дисциплины", StringComparison.OrdinalIgnoreCase))
+                if (text.Contains("Материально-техническое обеспечение дисциплины", StringComparison.OrdinalIgnoreCase))
                 {
                     startIndex = i;
                 }
@@ -224,29 +233,6 @@ namespace WordExcelParser
                     }
                 }
             }
-            if (startIndex == -1)
-            {
-                for (int i = 0; i < paragraphs.Count; i++)
-                {
-                    string text = paragraphs[i].Text;
-                    if (text.Contains("Материально-техническое обеспечение дисциплины", StringComparison.OrdinalIgnoreCase))
-                    {
-                        startIndex = i;
-                    }
-                    else if (text.Contains("ЛИСТ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        listIndices.Add(i);
-                    }
-                    else if (startIndex != -1 && text.Contains("\f") && i > startIndex)
-                    {
-                        endIndex = i;
-                        if (i + 1 < paragraphs.Count && paragraphs[i + 1].Text.Contains("ЛИСТ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            break; // Разрыв страницы с последующим "ЛИСТ" — конец раздела
-                        }
-                    }
-                }
-            }
 
             if (startIndex == -1)
                 return new List<string> { "Раздел обеспечения не найден" };
@@ -256,13 +242,16 @@ namespace WordExcelParser
 
             if (endIndex == -1 || endIndex <= startIndex)
                 endIndex = paragraphs.Count; // Если конец не найден, берем до конца документа
-
+            string pattern = @"^\d{1,2}\.\s";
             List<string> materialSupportLines = new();
             for (int i = startIndex + 1; i < endIndex; i++)
             {
                 string paragraphText = paragraphs[i].Text.Trim();
                 if (!string.IsNullOrWhiteSpace(paragraphText))
+                {
+                    paragraphText = Regex.Replace(paragraphText, pattern, "");
                     materialSupportLines.Add(paragraphText);
+                }
             }
 
             return materialSupportLines.Count > 0 ? materialSupportLines : new List<string> { "Список обеспечения пуст" };
@@ -419,6 +408,4 @@ namespace WordExcelParser
             return source?.IndexOf(toCheck, comp) >= 0;
         }
     }
-}
-
-//string pattern = @"(?<![0-9-])\d{1,2}\.\s";
+}//string pattern = @"(?<![0-9-])\d{1,2}\.\s";
